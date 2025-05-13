@@ -1,0 +1,80 @@
+import requests
+import json
+import pandas as pd
+from config import AUTH_HEADER
+from datetime import datetime
+
+def fetch_data_from_api(url, headers):
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as error:
+        print(f"Error fetching metrics: {error}")
+        return None
+
+def sort_metrics(metrics):
+    metrics.sort(key=lambda x: x.get("date", ""), reverse=True)
+    return metrics
+
+def filter_metrics(metrics, date):
+    if date == "all":
+        return metrics
+    elif date:
+        return [metric for metric in metrics if metric.get("date") == date]
+    else:
+        return metrics[:1] if metrics else []
+
+def save_to_json_file(data, filename):
+    with open(filename, "w") as file:
+        json.dump(data, file, indent=2)
+    print(f"Metrics written to {filename}")
+
+def save_to_excel_file(data, filename):
+    df = pd.json_normalize(data)
+    df.to_excel(filename, index=False)
+    print(f"Metrics written to {filename}")
+
+def save_to_csv_file(data, filename):
+    df = pd.json_normalize(data)
+    df.to_csv(filename, index=False)
+    print(f"Metrics written to {filename}")
+
+def fetch_metrics(date=None):
+    url = "https://api.github.com/enterprises/af1n1t1/copilot/metrics"
+    headers = AUTH_HEADER
+
+    metrics = fetch_data_from_api(url, headers)
+    if metrics is None:
+        return
+
+    metrics = sort_metrics(metrics)
+    filtered_metrics = filter_metrics(metrics, date)
+
+    print("Filtered Metrics:")
+    print(json.dumps(filtered_metrics, indent=2))
+
+    output_file_json = "copilot_metrics.json" if date != "all" else "copilot_metrics_all.json"
+    save_to_json_file(filtered_metrics, output_file_json)
+
+    # output_file_excel = "copilot_metrics.xlsx" if date != "all" else "copilot_metrics_all.xlsx"
+    # save_to_excel_file(filtered_metrics, output_file_excel)
+
+    output_file_csv = "copilot_metrics.csv" if date != "all" else "copilot_metrics_all.csv"
+    save_to_csv_file(filtered_metrics, output_file_csv)
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", help="Date for filtering metrics (format: YYYY-MM-DD), 'all' for all metrics, or leave empty for latest")
+    args = parser.parse_args()
+
+    if args.date and args.date != "all":
+        try:
+            datetime.strptime(args.date, "%Y-%m-%d")
+        except ValueError:
+            print("Invalid date format. Please use YYYY-MM-DD.")
+            exit(1)
+
+    fetch_metrics(args.date)
